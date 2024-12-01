@@ -1,0 +1,32 @@
+# Node modules
+node_modules/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Environment variables
+.env
+.env.local
+
+# Prisma generated files
+prisma/migrations/
+prisma/dev.db
+
+# Cache and output directories
+.pnp
+.pnp.js
+.vscode/
+
+# Generated Prisma Client
+prisma/client/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Miscellaneous
+*.log
+!.gitkeep

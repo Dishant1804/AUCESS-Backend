@@ -1,0 +1,91 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String         @id @default(uuid())
+  email     String         @unique
+  name      String
+  password  String
+  role      Role           @default(USER)
+  contests  Contest[]      @relation("UserContests")
+  points    ContestPoints[] @relation("UserPoints")
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+}
+
+model Admin {
+  id        String     @id @default(uuid())
+  email     String     @unique
+  name      String
+  password  String
+  isSuper   Boolean    @default(false)
+  subAdmins SubAdmin[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model SubAdmin {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  password  String
+  adminId   String
+  admin     Admin    @relation(fields: [adminId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Contest {
+  id          String         @id @default(uuid())
+  name        String
+  description String
+  fee         Float
+  maxUsers    Int
+  timeLimit   Int
+  questions   Question[]
+  users       User[]        @relation("UserContests")
+  points      ContestPoints[] @relation("ContestPoints")
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model Question {
+  id              String   @id @default(uuid())
+  content         String
+  options         Option[] @relation("QuestionOptions")
+  correctOptionId String   @unique
+  correctOption   Option   @relation("CorrectOption", fields: [correctOptionId], references: [id])
+  contestId       String
+  contest         Contest  @relation(fields: [contestId], references: [id])
+}
+
+model Option {
+  id         String    @id @default(uuid())
+  content    String
+  questionId String
+  question   Question  @relation("QuestionOptions", fields: [questionId], references: [id])
+  correctFor Question? @relation("CorrectOption")
+}
+
+model ContestPoints {
+  id        String   @id @default(uuid())
+  userId    String
+  contestId String
+  points    Int
+  user      User     @relation("UserPoints", fields: [userId], references: [id])
+  contest   Contest  @relation("ContestPoints", fields: [contestId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum Role {
+  USER
+  ADMIN
+  SUB_ADMIN
+}
