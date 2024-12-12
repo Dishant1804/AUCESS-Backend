@@ -9,7 +9,6 @@ dotenv.config();
 const JWT_SECRET_KEY = process.env.JWT_SECRET;
 const SALT_ROUNDS = 12;
 const prisma = new PrismaClient();
-
 const router = express.Router();
 
 // Generate JWT Token
@@ -36,48 +35,48 @@ const authenticate = (roles) => {
   };
 };
 
-// User Signup Route
+// Admin Signup Route
 router.post('/signup', async (req, res) => {
   const { email, name, password } = req.body;
 
   try {
     const hashedPassword = await hash(password, SALT_ROUNDS);
 
-    const user = await prisma.user.create({
+    const admin = await prisma.admin.create({
       data: {
         email,
         name,
-        password: hashedPassword,
-        role: 'USER'
+        password: hashedPassword
       }
     });
+    admin.role = 'ADMIN';
 
-    const token = generateToken(user);
+    const token = generateToken(admin);
     res.cookie('token', token, {
       httpOnly: true,
       sameSite: 'lax'
     });
 
-    return res.status(201).json({ message: 'Signup successful', success: true });
+    return res.status(201).json({ message: 'Admin signup successful', success: true });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: 'Internal server error', success: false });
   }
 });
 
-// User Login Route
+// Admin Login Route
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
 
   try {
-    const user = await prisma.user.findUnique({ where: { email } });
+    const admin = await prisma.admin.findUnique({ where: { email } });
 
-    if (!user) return res.status(404).json({ message: 'User not found', success: false });
+    if (!admin) return res.status(404).json({ message: 'Admin not found', success: false });
 
-    const isMatch = await compare(password, user.password);
+    const isMatch = await compare(password, admin.password);
     if (!isMatch) return res.status(401).json({ message: 'Invalid credentials', success: false });
 
-    const token = generateToken(user);
+    const token = generateToken(admin);
     res.cookie('token', token, {
       httpOnly: true,
       sameSite: 'lax'
@@ -90,64 +89,57 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// Protected Route Example (User)
-router.get('/dashboard', authenticate(['USER']), (req, res) => {
-  return res.status(200).json({ message: `Welcome ${req.user.role}`, user: req.user });
-});
-
-// Update Profile Route
-router.put('/profile', authenticate(['USER']), async (req, res) => {
-  const { name, password } = req.body;
-  const userId = req.user.id;
+// Create Sub-Admin (Admin-only)
+router.post('/create-sub-admin', authenticate(['ADMIN']), async (req, res) => {
+  const { email, name, password } = req.body;
+  const adminId = req.user.id;
 
   try {
-    const updatedData = {};
-    if (name) updatedData.name = name;
-    if (password) updatedData.password = await hash(password, SALT_ROUNDS);
+    const hashedPassword = await hash(password, SALT_ROUNDS);
 
-    const updatedUser = await prisma.user.update({
+    await prisma.subAdmin.create({
+      data: {
+        email,
+        name,
+        password: hashedPassword,
+        adminId
+      }
+    });
+
+    return res.status(201).json({ message: 'Sub-admin created successfully', success: true });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'Internal server error', success: false });
+  }
+});
+
+// Protected Route Example (Admin)
+router.get('/dashboard', authenticate(['ADMIN', 'SUB_ADMIN']), (req, res) => {
+  return res.status(200).json({ message: `Welcome Admin ${req.user.role}`, user: req.user });
+});
+
+// Delete User (Admin-only)
+router.delete('/delete-user/:id', authenticate(['ADMIN']), async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const user = await prisma.user.delete({
       where: {
-        id: userId
-      },
-      data: updatedData
+        id
+      }
     });
 
-    return res.status(200).json({ message: 'Profile updated successfully', success: true, user: updatedUser });
-  }
-  catch (err) {
+    res.clearCookie('token', {
+      httpOnly: true,
+      sameSite: 'Lax',
+    });
+
+    return res.status(200).json({ message: 'User deleted successfully', user });
+  } catch (err) {
     console.error(err);
     return res.status(500).json({ message: 'Internal server error', success: false });
   }
 });
 
-// Display Profile Details Route
-router.get('/profile', authenticate(['USER']), async (req, res) => {
-  const userId = req.user.id;
-
-  try {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, email: true, name: true, role: true }
-    });
-
-    if (!user) return res.status(404).json({ message: 'User not found', success: false });
-
-    return res.status(200).json({ user, success: true });
-  }
-  catch (err) {
-    console.error(err);
-    return res.status(500).json({ message: 'Internal server error', success: false });
-  }
-});
-
-// Logout Route
-router.post('/logout', authenticate(['USER']), (req, res) => {
-  res.clearCookie('token', {
-    httpOnly: true,
-    sameSite: 'lax'
-  });
-
-  return res.status(200).json({ message: 'Logged out successfully', success: true });
-});
 
 export default router;

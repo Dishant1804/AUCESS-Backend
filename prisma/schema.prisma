@@ -8,13 +8,13 @@ datasource db {
 }
 
 model User {
-  id        String         @id @default(uuid())
-  email     String         @unique
+  id        String   @id @default(uuid())
+  email     String   @unique
   name      String
   password  String
-  role      Role           @default(USER)
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
+  role      Role     @default(USER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Admin {
@@ -23,6 +23,7 @@ model Admin {
   name      String
   password  String
   isSuper   Boolean    @default(false)
+  role      Role       @default(ADMIN)
   subAdmins SubAdmin[]
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
@@ -33,6 +34,7 @@ model SubAdmin {
   email     String   @unique
   name      String
   password  String
+  role      Role     @default(SUB_ADMIN)
   adminId   String
   admin     Admin    @relation(fields: [adminId], references: [id])
   createdAt DateTime @default(now())
