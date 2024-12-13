@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 import { hash, compare } from "bcrypt";
 import { PrismaClient } from '@prisma/client';
+import passport from "./config/passportConfig.js";
 
 dotenv.config();
 
@@ -89,6 +90,55 @@ router.post('/login', async (req, res) => {
     return res.status(500).json({ message: 'Internal server error', success: false });
   }
 });
+
+router.get(
+  "/google/dashboard",
+  passport.authenticate("google-dashboard", {
+    scope: ["profile", "email"],
+  }),
+);
+
+//make this logic according to the schema
+/**
+ * change required
+ */
+router.get('/google/dashboard/callback', passport.authenticate('google-dashboard', {
+  session: false,
+  failureRedirect: "/login",
+}),
+  async (req, res) => {
+    try {
+      const { profile } = req.user;
+
+      const user = await prisma.user.upsert({
+        where: {
+          email: profile.emails[0].value,
+        },
+        create: {
+          name: profile.displayName,
+          email: profile.emails[0].value,
+          password: "google"
+        },
+        update: {
+          name: profile.displayName
+        }
+      });
+
+      const token = generateToken(user);
+
+      res.cookie("token", token, {
+        httpOnly: true,
+        sameSite: "lax",
+      });
+      //res.redirect()
+      res.send("user created");
+    }
+    catch (e) {
+      console.log(e);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  },
+);
 
 // Protected Route Example (User)
 router.get('/dashboard', authenticate(['USER']), (req, res) => {

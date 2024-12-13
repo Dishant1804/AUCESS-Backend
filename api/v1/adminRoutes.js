@@ -35,6 +35,11 @@ const authenticate = (roles) => {
   };
 };
 
+// Protected Route Example (Admin)
+router.get('/dashboard', authenticate(['ADMIN', 'SUB_ADMIN']), (req, res) => {
+  return res.status(200).json({ message: `Welcome Admin ${req.user.role}`, user: req.user });
+});
+
 // Admin Signup Route
 router.post('/signup', async (req, res) => {
   const { email, name, password } = req.body;
@@ -111,11 +116,6 @@ router.post('/create-sub-admin', authenticate(['ADMIN']), async (req, res) => {
     console.error(err);
     return res.status(500).json({ message: 'Internal server error', success: false });
   }
-});
-
-// Protected Route Example (Admin)
-router.get('/dashboard', authenticate(['ADMIN', 'SUB_ADMIN']), (req, res) => {
-  return res.status(200).json({ message: `Welcome Admin ${req.user.role}`, user: req.user });
 });
 
 // Delete User (Admin-only)
