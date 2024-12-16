@@ -98,10 +98,6 @@ router.get(
   }),
 );
 
-//make this logic according to the schema
-/**
- * change required
- */
 router.get('/google/dashboard/callback', passport.authenticate('google-dashboard', {
   session: false,
   failureRedirect: "/login",

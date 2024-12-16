@@ -8,25 +8,30 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
+  id        String       @id @default(uuid())
+  email     String       @unique
   name      String
   password  String
-  role      Role     @default(USER)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  role      Role         @default(USER)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  quizzes   UserQuiz[]
+  payments  Payment[]
+  LeaderBoard LeaderBoard[]
+  LeaderBoardEntry LeaderBoardEntry[]
 }
 
 model Admin {
-  id        String     @id @default(uuid())
-  email     String     @unique
+  id        String       @id @default(uuid())
+  email     String       @unique
   name      String
   password  String
-  isSuper   Boolean    @default(false)
-  role      Role       @default(ADMIN)
+  isSuper   Boolean      @default(false)
+  role      Role         @default(ADMIN)
   subAdmins SubAdmin[]
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  quizzes   Quiz[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
 }
 
 model SubAdmin {
@@ -37,6 +42,75 @@ model SubAdmin {
   role      Role     @default(SUB_ADMIN)
   adminId   String
   admin     Admin    @relation(fields: [adminId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Quiz {
+  id          String       @id @default(uuid())
+  title       String
+  description String
+  adminId     String
+  admin       Admin        @relation(fields: [adminId], references: [id])
+  questions   Question[]
+  users       UserQuiz[]
+  leaderBoard LeaderBoard?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  Payment Payment[]
+}
+
+model Question {
+  id       String   @id @default(uuid())
+  text     String
+  quizId   String
+  quiz     Quiz     @relation(fields: [quizId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model UserQuiz {
+  id        String   @id @default(uuid())
+  userId    String
+  quizId    String
+  user      User     @relation(fields: [userId], references: [id])
+  quiz      Quiz     @relation(fields: [quizId], references: [id])
+  joinedAt  DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model LeaderBoard {
+  id       String   @id @default(uuid())
+  quizId   String   @unique
+  quiz     Quiz     @relation(fields: [quizId], references: [id])
+  entries  LeaderBoardEntry[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  User User[]
+}
+
+model LeaderBoardEntry {
+  id          String   @id @default(uuid())
+  leaderboardId String
+  leaderboard   LeaderBoard @relation(fields: [leaderboardId], references: [id])
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  score       Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([leaderboardId, userId]) 
+}
+
+model Payment {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  amount    Float
+  quizId    String?
+  quiz      Quiz?    @relation(fields: [quizId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
