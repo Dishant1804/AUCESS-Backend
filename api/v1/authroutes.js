@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import { hash, compare } from "bcrypt";
 import { PrismaClient } from '@prisma/client';
 import passport from "./config/passportConfig.js";
+import authenticate from './middleware/authenticate.js';
 
 dotenv.config();
 
@@ -16,26 +17,7 @@ const router = express.Router();
 // Generate JWT Token
 const generateToken = (user) => {
   return jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET_KEY, { expiresIn: '15d' });
-};
-
-// Middleware to verify JWT and roles
-const authenticate = (roles) => {
-  return (req, res, next) => {
-    const token = req.headers.authorization?.split(' ')[1];
-    if (!token) return res.status(401).json({ message: 'Unauthorized', success: false });
-
-    jwt.verify(token, JWT_SECRET_KEY, (err, decoded) => {
-      if (err) return res.status(403).json({ message: 'Invalid token', success: false });
-
-      if (!roles.includes(decoded.role)) {
-        return res.status(403).json({ message: 'Access denied', success: false });
-      }
-
-      req.user = decoded;
-      next();
-    });
-  };
-};
+}
 
 // User Signup Route
 router.post('/signup', async (req, res) => {
