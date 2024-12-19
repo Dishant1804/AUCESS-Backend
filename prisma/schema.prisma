@@ -8,16 +8,16 @@ datasource db {
 }
 
 model User {
-  id               String             @id @default(uuid())
-  email            String             @unique
-  name             String
-  password         String
-  role             Role               @default(USER)
-  quizAttempts     QuizAttempt[]
-  payments         Payment[]
+  id                 String             @id @default(uuid())
+  email              String             @unique
+  name               String
+  password           String
+  role               Role               @default(USER)
+  quizAttempts       QuizAttempt[]
+  payments           Payment[]
   leaderboardEntries LeaderBoardEntry[]
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
 }
 
 model Admin {
@@ -40,33 +40,33 @@ model SubAdmin {
   password  String
   role      Role     @default(SUB_ADMIN)
   adminId   String
-  admin     Admin    @relation(fields: [adminId], references: [id])
+  admin     Admin    @relation(fields: [adminId], references: [id] , onDelete: Cascade)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model Quiz {
-  id          String         @id @default(uuid())
+  id          String        @id @default(uuid())
   title       String
   description String
-  price       Float?         
+  price       Float?
   adminId     String
-  admin       Admin          @relation(fields: [adminId], references: [id])
+  admin       Admin         @relation(fields: [adminId], references: [id])
   questions   Question[]
   attempts    QuizAttempt[]
   leaderboard LeaderBoard?
   payments    Payment[]
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 }
 
 model Question {
   id            String   @id @default(uuid())
   text          String
   quizId        String
-  quiz          Quiz     @relation(fields: [quizId], references: [id])
+  quiz          Quiz     @relation(fields: [quizId], references: [id] , onDelete: Cascade)
   options       Option[]
-  correctAnswer String   
+  correctAnswer String
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
@@ -75,7 +75,7 @@ model Option {
   id         String   @id @default(uuid())
   text       String
   questionId String
-  question   Question @relation(fields: [questionId], references: [id])
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }
@@ -85,7 +85,7 @@ model QuizAttempt {
   userId    String
   quizId    String
   user      User     @relation(fields: [userId], references: [id])
-  quiz      Quiz     @relation(fields: [quizId], references: [id])
+  quiz      Quiz     @relation(fields: [quizId], references: [id] , onDelete: Cascade)
   score     Int
   completed Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -96,17 +96,17 @@ model QuizAttempt {
 
 model LeaderBoard {
   id        String             @id @default(uuid())
-  quizId    String            @unique
-  quiz      Quiz              @relation(fields: [quizId], references: [id])
+  quizId    String             @unique
+  quiz      Quiz               @relation(fields: [quizId], references: [id] , onDelete: Cascade)
   entries   LeaderBoardEntry[]
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
 }
 
 model LeaderBoardEntry {
   id            String      @id @default(uuid())
   leaderboardId String
-  leaderboard   LeaderBoard @relation(fields: [leaderboardId], references: [id])
+  leaderboard   LeaderBoard @relation(fields: [leaderboardId], references: [id], onDelete: Cascade)
   userId        String
   user          User        @relation(fields: [userId], references: [id])
   score         Int
@@ -117,15 +117,15 @@ model LeaderBoardEntry {
 }
 
 model Payment {
-  id        String   @id @default(uuid())
+  id        String        @id @default(uuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id])
+  user      User          @relation(fields: [userId], references: [id])
   amount    Float
   quizId    String
-  quiz      Quiz     @relation(fields: [quizId], references: [id])
+  quiz      Quiz          @relation(fields: [quizId], references: [id] ,onDelete: Cascade)
   status    PaymentStatus @default(PENDING)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
 }
 
 enum Role {
