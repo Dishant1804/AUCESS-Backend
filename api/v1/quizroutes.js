@@ -274,7 +274,7 @@ router.patch('/:quizId', authenticate(['ADMIN']), async (req, res) => {
               }
             }
           });
-        } 
+        }
         else if (updates.operation === 'add') {
 
           await prisma.quiz.update({
@@ -364,6 +364,243 @@ router.delete('/:quizId', authenticate(['ADMIN']), async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error deleting quiz',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * @desc Join a quiz
+ * @route POST /api/v1/quiz/:quizId/join
+ * @access Private (Users only)
+ */
+router.post('/:quizId/join', authenticate(['USER']), async (req, res) => {
+  const { quizId } = req.params;
+  const userId = req.user.id;
+
+  try {
+    const quiz = await prisma.quiz.findUnique({
+      where: { id: quizId }
+    });
+
+    if (!quiz) {
+      return res.status(404).json({
+        success: false,
+        message: 'Quiz not found'
+      });
+    }
+
+    const existingAttempt = await prisma.quizAttempt.findUnique({
+      where: {
+        userId_quizId: {
+          userId,
+          quizId
+        }
+      }
+    });
+
+    if (existingAttempt) {
+      return res.status(400).json({
+        success: false,
+        message: 'You have already joined this quiz'
+      });
+    }
+
+    const quizAttempt = await prisma.quizAttempt.create({
+      data: {
+        userId,
+        quizId,
+        score: 0,
+        completed: false
+      },
+      include: {
+        quiz: {
+          select: {
+            title: true,
+            description: true
+          }
+        }
+      }
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Successfully joined the quiz',
+      data: quizAttempt
+    });
+  } catch (error) {
+    console.error('Error joining quiz:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error joining quiz',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * @desc Get all users in a particular quiz
+ * @route GET /api/v1/quiz/:quizId/users
+ * @access Private (Admin only)
+ */
+router.get('/:quizId/users', authenticate(['ADMIN']), async (req, res) => {
+  const { quizId } = req.params;
+
+  try {
+    const users = await prisma.quizAttempt.findMany({
+      where: {
+        quizId
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      count: users.length,
+      data: users
+    });
+  } 
+  catch (error) {
+    console.error('Error getting quiz users:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error getting quiz users',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * @desc Get all quizzes joined by a user
+ * @route GET /api/v1/quiz/user/joined
+ * @access Private
+ */
+router.get('/user/joined', authenticate(['USER']), async (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    const joinedQuizzes = await prisma.quizAttempt.findMany({
+      where: {
+        userId
+      },
+      include: {
+        quiz: {
+          include: {
+            _count: {
+              select: {
+                questions: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    const formattedQuizzes = joinedQuizzes.map(attempt => ({
+      attemptId: attempt.id,
+      quizId: attempt.quiz.id,
+      title: attempt.quiz.title,
+      description: attempt.quiz.description,
+      score: attempt.score,
+      completed: attempt.completed,
+      totalQuestions: attempt.quiz._count.questions,
+      joinedAt: attempt.createdAt
+    }));
+
+    res.status(200).json({
+      success: true,
+      count: formattedQuizzes.length,
+      data: formattedQuizzes
+    });
+  } catch (error) {
+    console.error('Error getting joined quizzes:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error getting joined quizzes',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * @desc Get quiz leaderboard
+ * @route GET /api/v1/quiz/:quizId/leaderboard
+ * @access Public
+ */
+router.get('/:quizId/leaderboard', authMiddleware, async (req, res) => {
+  const { quizId } = req.params;
+  const { limit = 10, page = 1 } = req.query;
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+
+  try {
+    const leaderboardEntries = await prisma.leaderBoardEntry.findMany({
+      where: {
+        leaderboard: {
+          quizId
+        }
+      },
+      include: {
+        user: {
+          select: {
+            name: true,
+            email: true
+          }
+        }
+      },
+      orderBy: {
+        score: 'desc'
+      },
+      take: parseInt(limit),
+      skip: skip
+    });
+
+    const totalEntries = await prisma.leaderBoardEntry.count({
+      where: {
+        leaderboard: {
+          quizId
+        }
+      }
+    });
+
+    const formattedEntries = leaderboardEntries.map((entry, index) => ({
+      rank: skip + index + 1,
+      score: entry.score,
+      userName: entry.user.name,
+      userEmail: entry.user.email,
+      createdAt: entry.createdAt
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: {
+        entries: formattedEntries,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(totalEntries / parseInt(limit)),
+          totalEntries,
+          entriesPerPage: parseInt(limit)
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error getting leaderboard:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error getting leaderboard',
       error: error.message
     });
   }
