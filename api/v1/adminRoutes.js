@@ -13,9 +13,9 @@ const prisma = new PrismaClient();
 const router = express.Router();
 
 // Generate JWT Token
-const generateToken = (user) => {
-  return jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET_KEY, {expiresIn : "30d"});
-};
+  const generateToken = (user) => {
+    return jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET_KEY, {expiresIn : "30d"});
+  };
 
 // Protected Route Example (Admin)
 router.get('/dashboard', authenticate(['ADMIN', 'SUB_ADMIN']), (req, res) => {

@@ -372,9 +372,9 @@ router.delete('/:quizId', authenticate(['ADMIN']), async (req, res) => {
 /**
  * @desc Join a quiz
  * @route POST /api/v1/quiz/:quizId/join
- * @access Private (Users only)
+ * @access Public
  */
-router.post('/:quizId/join', authenticate(['USER']), async (req, res) => {
+router.post('/:quizId/join', authMiddleware, async (req, res) => {
   const { quizId } = req.params;
   const userId = req.user.id;
 
