@@ -1,7 +1,7 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
-import { hash, compare } from "bcrypt";
+import { hash, compare } from "bcryptjs";
 import { PrismaClient } from '@prisma/client';
 import authenticate from './middleware/authenticate.js';
 
@@ -13,13 +13,20 @@ const prisma = new PrismaClient();
 const router = express.Router();
 
 // Generate JWT Token
-  const generateToken = (user) => {
-    return jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET_KEY, {expiresIn : "30d"});
-  };
+const generateToken = (user) => {
+  return jwt.sign(
+    { id: user.id, email: user.email, role: user.role },
+    JWT_SECRET_KEY,
+    { expiresIn: "30d" }
+  );
+};
 
-// Protected Route Example (Admin)
+// Protected Route Example (Admin + Sub-admin)
 router.get('/dashboard', authenticate(['ADMIN', 'SUB_ADMIN']), (req, res) => {
-  return res.status(200).json({ message: `Welcome Admin ${req.user.role}`, user: req.user });
+  return res.status(200).json({
+    message: `Welcome Admin ${req.user.role}`,
+    user: req.user
+  });
 });
 
 // Admin Signup Route
@@ -33,10 +40,11 @@ router.post('/signup', async (req, res) => {
       data: {
         email,
         name,
-        password: hashedPassword
+        password: hashedPassword,
       }
     });
-    admin.role = 'ADMIN';
+
+    admin.role = 'ADMIN'; // You can also persist this to DB if needed
 
     const token = generateToken(admin);
     res.cookie('token', token, {
@@ -58,10 +66,14 @@ router.post('/login', async (req, res) => {
   try {
     const admin = await prisma.admin.findUnique({ where: { email } });
 
-    if (!admin) return res.status(404).json({ message: 'Admin not found', success: false });
+    if (!admin)
+      return res.status(404).json({ message: 'Admin not found', success: false });
 
     const isMatch = await compare(password, admin.password);
-    if (!isMatch) return res.status(401).json({ message: 'Invalid credentials', success: false });
+    if (!isMatch)
+      return res.status(401).json({ message: 'Invalid credentials', success: false });
+
+    admin.role = 'ADMIN';
 
     const token = generateToken(admin);
     res.cookie('token', token, {
@@ -122,6 +134,5 @@ router.delete('/delete-user/:id', authenticate(['ADMIN']), async (req, res) => {
     return res.status(500).json({ message: 'Internal server error', success: false });
   }
 });
-
 
 export default router;
