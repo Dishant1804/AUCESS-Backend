@@ -1,7 +1,7 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
-import { hash, compare } from "bcrypt";
+import bcrypt from "bcryptjs";
 import { PrismaClient } from '@prisma/client';
 import passport from "./config/passportConfig.js";
 import authenticate from './middleware/authenticate.js';
@@ -16,29 +16,33 @@ const router = express.Router();
 
 // Generate JWT Token
 const generateToken = (user) => {
-  return jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET_KEY, { expiresIn: '15d' });
-}
+  return jwt.sign(
+    { id: user.id, email: user.email, role: user.role },
+    JWT_SECRET_KEY,
+    { expiresIn: '15d' }
+  );
+};
 
 // User Signup Route
 router.post('/signup', async (req, res) => {
   const { email, name, password } = req.body;
 
   try {
-    const hashedPassword = await hash(password, SALT_ROUNDS);
+    const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
 
     const user = await prisma.user.create({
       data: {
         email,
         name,
         password: hashedPassword,
-        role: 'USER'
-      }
+        role: 'USER',
+      },
     });
 
     const token = generateToken(user);
     res.cookie('token', token, {
       httpOnly: true,
-      sameSite: 'lax'
+      sameSite: 'lax',
     });
 
     return res.status(201).json({ message: 'Signup successful', success: true });
@@ -55,15 +59,17 @@ router.post('/login', async (req, res) => {
   try {
     const user = await prisma.user.findUnique({ where: { email } });
 
-    if (!user) return res.status(404).json({ message: 'User not found', success: false });
+    if (!user)
+      return res.status(404).json({ message: 'User not found', success: false });
 
-    const isMatch = await compare(password, user.password);
-    if (!isMatch) return res.status(401).json({ message: 'Invalid credentials', success: false });
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch)
+      return res.status(401).json({ message: 'Invalid credentials', success: false });
 
     const token = generateToken(user);
     res.cookie('token', token, {
       httpOnly: true,
-      sameSite: 'lax'
+      sameSite: 'lax',
     });
 
     return res.status(200).json({ message: 'Login successful', success: true });
@@ -74,16 +80,18 @@ router.post('/login', async (req, res) => {
 });
 
 router.get(
-  "/google/dashboard",
-  passport.authenticate("google-dashboard", {
-    scope: ["profile", "email"],
-  }),
+  '/google/dashboard',
+  passport.authenticate('google-dashboard', {
+    scope: ['profile', 'email'],
+  })
 );
 
-router.get('/google/dashboard/callback', passport.authenticate('google-dashboard', {
-  session: false,
-  failureRedirect: "/login",
-}),
+router.get(
+  '/google/dashboard/callback',
+  passport.authenticate('google-dashboard', {
+    session: false,
+    failureRedirect: '/login',
+  }),
   async (req, res) => {
     try {
       const { profile } = req.user;
@@ -95,27 +103,26 @@ router.get('/google/dashboard/callback', passport.authenticate('google-dashboard
         create: {
           name: profile.displayName,
           email: profile.emails[0].value,
-          password: "google"
+          password: 'google',
         },
         update: {
-          name: profile.displayName
-        }
+          name: profile.displayName,
+        },
       });
 
       const token = generateToken(user);
 
-      res.cookie("token", token, {
+      res.cookie('token', token, {
         httpOnly: true,
-        sameSite: "lax",
+        sameSite: 'lax',
       });
-      //res.redirect()
-      res.send("user created");
-    }
-    catch (e) {
+
+      res.send('user created');
+    } catch (e) {
       console.log(e);
-      res.status(500).json({ error: "Internal server error" });
+      res.status(500).json({ error: 'Internal server error' });
     }
-  },
+  }
 );
 
 // Protected Route Example (User)
@@ -131,18 +138,21 @@ router.put('/profile', authenticate(['USER']), async (req, res) => {
   try {
     const updatedData = {};
     if (name) updatedData.name = name;
-    if (password) updatedData.password = await hash(password, SALT_ROUNDS);
+    if (password) updatedData.password = await bcrypt.hash(password, SALT_ROUNDS);
 
     const updatedUser = await prisma.user.update({
       where: {
-        id: userId
+        id: userId,
       },
-      data: updatedData
+      data: updatedData,
     });
 
-    return res.status(200).json({ message: 'Profile updated successfully', success: true, user: updatedUser });
-  }
-  catch (err) {
+    return res.status(200).json({
+      message: 'Profile updated successfully',
+      success: true,
+      user: updatedUser,
+    });
+  } catch (err) {
     console.error(err);
     return res.status(500).json({ message: 'Internal server error', success: false });
   }
@@ -155,14 +165,14 @@ router.get('/profile', authenticate(['USER']), async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, email: true, name: true, role: true }
+      select: { id: true, email: true, name: true, role: true },
     });
 
-    if (!user) return res.status(404).json({ message: 'User not found', success: false });
+    if (!user)
+      return res.status(404).json({ message: 'User not found', success: false });
 
     return res.status(200).json({ user, success: true });
-  }
-  catch (err) {
+  } catch (err) {
     console.error(err);
     return res.status(500).json({ message: 'Internal server error', success: false });
   }
@@ -172,7 +182,7 @@ router.get('/profile', authenticate(['USER']), async (req, res) => {
 router.post('/logout', authenticate(['USER']), (req, res) => {
   res.clearCookie('token', {
     httpOnly: true,
-    sameSite: 'lax'
+    sameSite: 'lax',
   });
 
   return res.status(200).json({ message: 'Logged out successfully', success: true });
