@@ -741,16 +741,11 @@ router.post('/:quizId/submit', authenticate(['USER']), async (req, res) => {
     const questionsMap = new Map(quiz.questions.map(q => [q.id, q]));
     let score = 0;
 
-    // console.log(answers);
-
     const results = answers.map(({ questionId, answerId }) => {
       const question = questionsMap.get(questionId);
       if (!question) return { questionId, correct: false, message: 'Invalid question' };
 
       const correct = question.correctAnswer === answerId;
-      // console.log(correct);
-      // console.log(question.correctAnswer);
-      // console.log(answerId);
       
       if (correct) score += 1;
 
