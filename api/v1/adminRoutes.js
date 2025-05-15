@@ -170,7 +170,7 @@ router.delete('/delete-user/:id', authenticate(['ADMIN', 'SUB_ADMIN']), async (r
 });
 
 // Get Sub-Admins (Admin-only)
-router.get('/sub-admins', authenticate(['ADMIN']), async (req, res) => {
+router.get('/sub-admins', authenticate(['ADMIN', 'SUB_ADMIN']), async (req, res) => {
   const adminId = req.user.id;
 
   try {
@@ -185,13 +185,20 @@ router.get('/sub-admins', authenticate(['ADMIN']), async (req, res) => {
         name: true,
         createdAt: true,
         updatedAt: true,
-        password: true
+      },
+    });
+
+    // Get total count of sub-admins
+    const totalSubAdmins = await prisma.subAdmin.count({
+      where: {
+        adminId
       }
     });
 
     return res.status(200).json({ 
       message: 'Sub-admins fetched successfully', 
       subAdmins,
+      count: totalSubAdmins,
       success: true 
     });
   } catch (err) {

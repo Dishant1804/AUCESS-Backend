@@ -50,6 +50,8 @@ model Quiz {
   title       String
   description String
   price       Float?
+  startDate   DateTime?
+  endDate     DateTime?
   adminId     String
   admin       Admin         @relation(fields: [adminId], references: [id])
   questions   Question[]
