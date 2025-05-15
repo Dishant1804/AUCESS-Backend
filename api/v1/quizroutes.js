@@ -13,7 +13,7 @@ const router = express.Router();
  * @tested True
  */
 router.post('/create-quiz', authenticate(['ADMIN']), async (req, res) => {
-  const { title, description, price, questions } = req.body;
+  const { title, description, price, questions, startDate, endDate } = req.body;
   const adminId = req.user.id;
 
   try {
@@ -23,11 +23,24 @@ router.post('/create-quiz', authenticate(['ADMIN']), async (req, res) => {
       });
     }
 
+    // Parse dates if they're provided
+    const parsedStartDate = startDate ? new Date(startDate) : null;
+    const parsedEndDate = endDate ? new Date(endDate) : null;
+
+    // Validate dates if both are provided
+    if (parsedStartDate && parsedEndDate && parsedStartDate > parsedEndDate) {
+      return res.status(400).json({
+        message: 'End date must be after start date'
+      });
+    }
+
     const quiz = await prisma.quiz.create({
       data: {
         title,
         description,
         price,
+        startDate: parsedStartDate,
+        endDate: parsedEndDate,
         adminId,
         questions: {
           create: questions.map(question => ({
@@ -41,7 +54,6 @@ router.post('/create-quiz', authenticate(['ADMIN']), async (req, res) => {
           }))
         }
       },
-
       include: {
         questions: {
           include: {
@@ -74,8 +86,11 @@ router.post('/create-quiz', authenticate(['ADMIN']), async (req, res) => {
  * @access Public 
  * @tested True
  */
+
 router.get('/quizzes', authMiddleware, async (req, res) => {
   try {
+    const currentDate = new Date();
+    
     const quizzes = await prisma.quiz.findMany({
       include: {
         _count: {
@@ -100,12 +115,231 @@ router.get('/quizzes', authMiddleware, async (req, res) => {
       }
     });
 
+    // Get total count of quizzes
+    const totalQuizzes = quizzes.length;
+    
+    // Calculate total questions across all quizzes
+    const totalQuestions = quizzes.reduce((sum, quiz) => sum + quiz.questions.length, 0);
 
-    const formattedQuizzes = quizzes.map(quiz => ({
+    const formattedQuizzes = quizzes.map(quiz => {
+      // Determine quiz status based on dates
+      let status = 'upcoming';
+      if (quiz.startDate && quiz.endDate) {
+        if (currentDate < quiz.startDate) {
+          status = 'upcoming';
+        } else if (currentDate >= quiz.startDate && currentDate <= quiz.endDate) {
+          status = 'ongoing';
+        } else {
+          status = 'completed';
+        }
+      } else if (quiz.startDate && !quiz.endDate) {
+        status = currentDate >= quiz.startDate ? 'ongoing' : 'upcoming';
+      } else if (!quiz.startDate && quiz.endDate) {
+        status = currentDate <= quiz.endDate ? 'ongoing' : 'completed';
+      }
+
+      return {
+        id: quiz.id,
+        title: quiz.title,
+        description: quiz.description,
+        price: quiz.price,
+        startDate: quiz.startDate,
+        endDate: quiz.endDate,
+        status,
+        totalQuestions: quiz.questions.length,
+        totalParticipants: quiz._count.attempts,
+        leaderboardEntries: quiz.leaderboard?._count.entries ?? 0,
+        createdAt: quiz.createdAt,
+        updatedAt: quiz.updatedAt
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      data: formattedQuizzes,
+      count: totalQuizzes,
+      summary: {
+        totalQuizzes,
+        totalQuestions
+      }
+    });
+  }
+  catch (error) {
+    console.error('Error getting all quizzes:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error getting quizzes',
+      error: error.message
+    });
+  }
+});
+
+// Route for upcoming quizzes
+router.get('/upcoming', authMiddleware, async (req, res) => {
+  try {
+    const currentDate = new Date();
+    
+    const upcomingQuizzes = await prisma.quiz.findMany({
+      where: {
+        startDate: {
+          gt: currentDate
+        }
+      },
+      include: {
+        _count: {
+          select: {
+            attempts: true
+          }
+        },
+        questions: {
+          select: {
+            id: true
+          }
+        }
+      }
+    });
+
+    const formattedQuizzes = upcomingQuizzes.map(quiz => ({
       id: quiz.id,
       title: quiz.title,
       description: quiz.description,
       price: quiz.price,
+      startDate: quiz.startDate,
+      endDate: quiz.endDate,
+      totalQuestions: quiz.questions.length,
+      totalParticipants: quiz._count.attempts,
+      createdAt: quiz.createdAt,
+      updatedAt: quiz.updatedAt
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: formattedQuizzes,
+      count: upcomingQuizzes.length
+    });
+  }
+  catch (error) {
+    console.error('Error getting upcoming quizzes:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error getting upcoming quizzes',
+      error: error.message
+    });
+  }
+});
+
+// Route for ongoing quizzes
+router.get('/ongoing', authMiddleware, async (req, res) => {
+  try {
+    const currentDate = new Date();
+    
+    const ongoingQuizzes = await prisma.quiz.findMany({
+      where: {
+        OR: [
+          {
+            AND: [
+              { startDate: { lte: currentDate } },
+              { endDate: { gte: currentDate } }
+            ]
+          },
+          {
+            AND: [
+              { startDate: { lte: currentDate } },
+              { endDate: null }
+            ]
+          },
+          {
+            AND: [
+              { startDate: null },
+              { endDate: { gte: currentDate } }
+            ]
+          }
+        ]
+      },
+      include: {
+        _count: {
+          select: {
+            attempts: true
+          }
+        },
+        questions: {
+          select: {
+            id: true
+          }
+        }
+      }
+    });
+
+    const formattedQuizzes = ongoingQuizzes.map(quiz => ({
+      id: quiz.id,
+      title: quiz.title,
+      description: quiz.description,
+      price: quiz.price,
+      startDate: quiz.startDate,
+      endDate: quiz.endDate,
+      totalQuestions: quiz.questions.length,
+      totalParticipants: quiz._count.attempts,
+      createdAt: quiz.createdAt,
+      updatedAt: quiz.updatedAt
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: formattedQuizzes,
+      count: ongoingQuizzes.length
+    });
+  }
+  catch (error) {
+    console.error('Error getting ongoing quizzes:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error getting ongoing quizzes',
+      error: error.message
+    });
+  }
+});
+
+// Route for completed quizzes
+router.get('/completed', authMiddleware, async (req, res) => {
+  try {
+    const currentDate = new Date();
+    
+    const completedQuizzes = await prisma.quiz.findMany({
+      where: {
+        endDate: {
+          lt: currentDate
+        }
+      },
+      include: {
+        _count: {
+          select: {
+            attempts: true
+          }
+        },
+        questions: {
+          select: {
+            id: true
+          }
+        },
+        leaderboard: {
+          include: {
+            _count: {
+              select: {
+                entries: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    const formattedQuizzes = completedQuizzes.map(quiz => ({
+      id: quiz.id,
+      title: quiz.title,
+      description: quiz.description,
+      price: quiz.price,
+      startDate: quiz.startDate,
+      endDate: quiz.endDate,
       totalQuestions: quiz.questions.length,
       totalParticipants: quiz._count.attempts,
       leaderboardEntries: quiz.leaderboard?._count.entries ?? 0,
@@ -115,14 +349,151 @@ router.get('/quizzes', authMiddleware, async (req, res) => {
 
     res.status(200).json({
       success: true,
-      data: formattedQuizzes
+      data: formattedQuizzes,
+      count: completedQuizzes.length
     });
   }
   catch (error) {
-    console.error('Error getting all quizzes:', error);
+    console.error('Error getting completed quizzes:', error);
     res.status(500).json({
       success: false,
-      message: 'Error getting quizzes',
+      message: 'Error getting completed quizzes',
+      error: error.message
+    });
+  }
+});
+
+// Route for user's completed quizzes
+router.get('/user/quizzes/completed', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    // Find all quizzes where the user has completed attempts
+    const completedQuizzes = await prisma.quizAttempt.findMany({
+      where: {
+        userId,
+        completed: true
+      },
+      include: {
+        quiz: {
+          include: {
+            questions: {
+              select: {
+                id: true
+              }
+            },
+            leaderboard: {
+              include: {
+                entries: {
+                  where: {
+                    userId
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    const formattedQuizzes = completedQuizzes.map(attempt => {
+      const quiz = attempt.quiz;
+      const userLeaderboardEntry = quiz.leaderboard?.entries[0];
+      
+      return {
+        id: quiz.id,
+        title: quiz.title,
+        description: quiz.description,
+        yourScore: attempt.score,
+        totalQuestions: quiz.questions.length,
+        leaderboardRank: userLeaderboardEntry ? userLeaderboardEntry.score : null,
+        attemptedAt: attempt.updatedAt,
+        createdAt: quiz.createdAt,
+        updatedAt: quiz.updatedAt
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      data: formattedQuizzes,
+      count: completedQuizzes.length
+    });
+  }
+  catch (error) {
+    console.error('Error getting user completed quizzes:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error getting user completed quizzes',
+      error: error.message
+    });
+  }
+});
+
+// Route for user's upcoming registered quizzes
+router.get('/user/quizzes/upcoming', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const currentDate = new Date();
+    
+    // Find all paid quizzes that haven't started yet
+    const upcomingQuizzes = await prisma.payment.findMany({
+      where: {
+        userId,
+        status: 'COMPLETED',
+        quiz: {
+          OR: [
+            { startDate: { gt: currentDate } },
+            {
+              AND: [
+                { startDate: null },
+                { endDate: { gt: currentDate } }
+              ]
+            }
+          ]
+        }
+      },
+      include: {
+        quiz: {
+          include: {
+            questions: {
+              select: {
+                id: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    const formattedQuizzes = upcomingQuizzes.map(payment => {
+      const quiz = payment.quiz;
+      
+      return {
+        id: quiz.id,
+        title: quiz.title,
+        description: quiz.description,
+        price: quiz.price,
+        startDate: quiz.startDate,
+        endDate: quiz.endDate,
+        totalQuestions: quiz.questions.length,
+        paymentStatus: payment.status,
+        paymentDate: payment.createdAt,
+        createdAt: quiz.createdAt,
+        updatedAt: quiz.updatedAt
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      data: formattedQuizzes,
+      count: upcomingQuizzes.length
+    });
+  }
+  catch (error) {
+    console.error('Error getting user upcoming quizzes:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error getting user upcoming quizzes',
       error: error.message
     });
   }
@@ -211,7 +582,6 @@ router.get('/:quizId', authMiddleware, async (req, res) => {
   }
 });
 
-//TODO:
 /**
  * @desc Update quiz (partial update)
  * @route PATCH /api/v1/quiz/:quizId
@@ -241,13 +611,25 @@ router.patch('/:quizId', authenticate(['ADMIN']), async (req, res) => {
     const updatedQuiz = await prisma.$transaction(async (prisma) => {
       let quiz = existingQuiz;
 
-      if (updates.title || updates.description || updates.price !== undefined) {
+      // Parse dates if they're provided
+      const parsedStartDate = updates.startDate ? new Date(updates.startDate) : undefined;
+      const parsedEndDate = updates.endDate ? new Date(updates.endDate) : undefined;
+
+      // Validate dates if both are provided
+      if (parsedStartDate && parsedEndDate && parsedStartDate > parsedEndDate) {
+        throw new Error('End date must be after start date');
+      }
+
+      if (updates.title || updates.description || updates.price !== undefined || 
+          updates.startDate !== undefined || updates.endDate !== undefined) {
         quiz = await prisma.quiz.update({
           where: { id: quizId },
           data: {
             ...(updates.title && { title: updates.title }),
             ...(updates.description && { description: updates.description }),
-            ...(updates.price !== undefined && { price: updates.price })
+            ...(updates.price !== undefined && { price: updates.price }),
+            ...(parsedStartDate !== undefined && { startDate: parsedStartDate }),
+            ...(parsedEndDate !== undefined && { endDate: parsedEndDate })
           }
         });
       }
@@ -323,7 +705,6 @@ router.patch('/:quizId', authenticate(['ADMIN']), async (req, res) => {
   }
 });
 
-//TODO:
 /**
  * @desc Delete quiz
  * @route DELETE /api/v1/quiz/:quizId
@@ -381,6 +762,8 @@ router.post('/:quizId/join', authMiddleware, async (req, res) => {
   const userId = req.user.id;
 
   try {
+    const currentDate = new Date();
+    
     const quiz = await prisma.quiz.findUnique({
       where: { id: quizId }
     });
@@ -389,6 +772,22 @@ router.post('/:quizId/join', authMiddleware, async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Quiz not found'
+      });
+    }
+
+    // Check if quiz is upcoming (start date is in the future)
+    if (quiz.startDate && quiz.startDate > currentDate) {
+      return res.status(403).json({
+        success: false,
+        message: 'This quiz has not started yet. Please wait until the start date.'
+      });
+    }
+
+    // Check if quiz is completed (end date is in the past)
+    if (quiz.endDate && quiz.endDate < currentDate) {
+      return res.status(403).json({
+        success: false,
+        message: 'This quiz has already ended and is no longer available.'
       });
     }
 
@@ -408,6 +807,7 @@ router.post('/:quizId/join', authMiddleware, async (req, res) => {
       });
     }
 
+    // If we reach here, the quiz is ongoing and can be joined
     const quizAttempt = await prisma.quizAttempt.create({
       data: {
         userId,
@@ -440,7 +840,6 @@ router.post('/:quizId/join', authMiddleware, async (req, res) => {
   }
 });
 
-//TODO:
 /**
  * @desc Get all users in a particular quiz
  * @route GET /api/v1/quiz/:quizId/users

@@ -24,7 +24,28 @@ router.get('/', authMiddleware, authenticate(['ADMIN', 'SUB_ADMIN']), async (req
             }
         });
 
-        res.status(200).json({ success: true, data: users });
+        // Get total count of users
+        const totalUsers = await prisma.user.count();
+
+        // Get counts by role
+        const usersByRole = await prisma.user.groupBy({
+            by: ['role'],
+            _count: {
+                id: true
+            }
+        });
+
+        const roleCounts = {};
+        usersByRole.forEach(item => {
+            roleCounts[item.role] = item._count.id;
+        });
+
+        res.status(200).json({ 
+            success: true, 
+            data: users, 
+            count: totalUsers,
+            roleCounts
+        });
     } catch (error) {
         console.error('Error fetching users:', error);
         res.status(500).json({ success: false, message: 'Server error', error: error.message });
