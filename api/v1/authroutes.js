@@ -17,7 +17,7 @@ const router = express.Router();
 // Generate JWT Token
 const generateToken = (user) => {
   return jwt.sign(
-    { id: user.id, email: user.email, role: user.role },
+    { id: user.id, email: user.email, role: user.role, name: user.name },
     JWT_SECRET_KEY,
     { expiresIn: '15d' }
   );
