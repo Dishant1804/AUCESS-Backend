@@ -15,7 +15,7 @@ const router = express.Router();
 // Generate JWT Token
 const generateToken = (user) => {
   return jwt.sign(
-    { id: user.id, email: user.email, role: user.role },
+    { id: user.id, email: user.email, role: user.role, name: user.name },
     JWT_SECRET_KEY,
     { expiresIn: "30d" }
   );
@@ -24,8 +24,11 @@ const generateToken = (user) => {
 // Protected Route Example (Admin + Sub-admin)
 router.get('/dashboard', authenticate(['ADMIN', 'SUB_ADMIN']), (req, res) => {
   return res.status(200).json({
-    message: `Welcome Admin ${req.user.role}`,
-    user: req.user
+    message: `Welcome ${req.user.name}`,
+    name: req.user.name,
+    role: req.user.role,
+    user: req.user,
+    success: true
   });
 });
 
@@ -243,6 +246,91 @@ router.delete('/sub-admin/:id', authenticate(['ADMIN']), async (req, res) => {
     console.error(err);
     return res.status(500).json({ message: 'Internal server error', success: false });
   }
+});
+
+router.get('/admin-profile', authenticate(['ADMIN', 'SUB_ADMIN']), async (req, res) => {
+  const adminId = req.user.id;
+  const role = req.user.role;
+
+  try {
+    let adminData;
+    
+    if (role === 'ADMIN') {
+      adminData = await prisma.admin.findUnique({
+        where: { id: adminId },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          isSuper: true,
+          createdAt: true,
+          updatedAt: true,
+          _count: {
+            select: {
+              subAdmins: true,
+              quizzes: true
+            }
+          }
+        }
+      });
+      
+      if (!adminData) {
+        return res.status(404).json({ 
+          message: 'Admin not found', 
+          success: false 
+        });
+      }
+      
+      // Add role explicitly since it's not stored in DB
+      adminData.role = 'ADMIN';
+    } else if (role === 'SUB_ADMIN') {
+      adminData = await prisma.subAdmin.findUnique({
+        where: { id: adminId },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          createdAt: true,
+          updatedAt: true,
+          admin: {
+            select: {
+              id: true,
+              name: true,
+              email: true
+            }
+          }
+        }
+      });
+      
+      if (!adminData) {
+        return res.status(404).json({ 
+          message: 'Sub-admin not found', 
+          success: false 
+        });
+      }
+      
+      // Add role explicitly since it's not stored in DB
+      adminData.role = 'SUB_ADMIN';
+    }
+
+    return res.status(200).json({
+      message: 'Admin profile fetched successfully',
+      admin: adminData,
+      success: true
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'Internal server error', success: false });
+  }
+});
+
+router.post('/logout', authenticate(['ADMIN', 'SUB_ADMIN']), (req, res) => {
+  res.clearCookie('token', {
+    httpOnly: true,
+    sameSite: 'lax',
+  });
+
+  return res.status(200).json({ message: 'Logged out successfully', success: true });
 });
 
 export default router;
